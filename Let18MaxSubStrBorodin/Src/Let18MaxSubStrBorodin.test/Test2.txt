@@ -1,0 +1,396 @@
+
+Hamzeh, et al.               Informational                     [Page 36]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+   Some error recovery procedures are common to all states of the
+   control connection.  If an expected reply does not arrive within 60
+   seconds, the control connection is closed, unless otherwise
+   specified.  Appropriate logging should be implemented for easy
+   determination of the problems and the reasons for closing the control
+   connection.
+
+   Receipt of an invalid or malformed Control Connection message should
+   be logged appropriately, and the control connection should be closed
+   and restarted to ensure recovery into a known state.
+
+3.1.  Control Connection States
+
+   The control connection relies on a standard TCP connection for its
+   service.  The PPTP control connection protocol is not distinguishable
+   between the PNS and PAC, but is distinguishable between the
+   originator and receiver. The originating peer is the one which first
+   attempts the TCP open. Since either PAC or PNS may originate a
+   connection, it is possible for a TCP collision to occur.  See section
+   3.1.3 for a description of this situation.
+
+3.1.1.  Control Connection Originator (may be PAC or PNS)
+
+                TCP Open Indication
+                /Send Start Control
+                  Connection Request       +-----------------+
+     +------------------------------------>|  wait_ctl_reply |
+     |                                     +-----------------+
+     |     Collision/See (4.1.3) Close TCP   V  V  V   Receive Start Ctl
+     |       +-------------------------------+  |  |   Connection Reply
+     |       |                                  |  |   Version OK
+     ^       V                                  |  V
++-----------------+          Receive Start Ctl  | +-----------------+
+|      idle       |          Connection Reply   | |   established   |
++-----------------+          Version Not OK     | +-----------------+
+     ^                                          |  V   Local Terminate
+     |         Receive Stop Control             |  |   /Send Stop
+     |         Connection Request               |  |    Control Request
+     |         /Send Stop Control Reply         V  V
+     |          Close TCP                  +-----------------+
+     +-------------------------------------| wait_stop_reply |
+                                           +-----------------+
+
+
+
+
+
+
+
+
+
+Hamzeh, et al.               Informational                     [Page 37]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+   idle
+      The control connection originator attempts to open a TCP
+      connection to the peer during idle state. When the TCP connection
+      is open, the originator transmits a send Start-Control-
+      Connection-Request and then enters the wait_ctl_reply state.
+
+   wait_ctl_reply
+      The originator checks to see if another TCP connection has been
+      requested from the same peer, and if so, handles the collision
+      situation described in section 3.1.3.
+
+      When a Start-Control-Connection-Reply is received, it is examined
+      for a compatible version. If the version of the reply is lower
+      than the version sent in the request, the older (lower) version
+      should be used provided it is supported.  If the version in the
+      reply is earlier and supported, the originator moves to the
+      established state. If the version is earlier and not supported, a
+      Stop-Control-Connection-Request SHOULD be sent to the peer and the
+      originator moves into the wait_stop_reply state.
+
+   established
+      An established connection may be terminated by either a local
+      condition or the receipt of a Stop-Control-Connection-Request. In
+      the event of a local termination, the originator MUST send a
+      Stop-Control-Connection-Request and enter the wait_stop_reply
+      state.
+
+      If the originator receives a Stop-Control-Connection-Request it
+      SHOULD send a Stop-Control-Connection-Reply and close the TCP
+      connection making sure that the final TCP information has been
+      "pushed" properly.
+
+   wait_stop_reply
+      If a Stop-Control-Connection-Reply is received, the TCP connection
+      SHOULD be closed and the control connection becomes idle.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Hamzeh, et al.               Informational                     [Page 38]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+3.1.2.  Control connection Receiver (may be PAC or PNS)
+
+Receive Start Control Connection Request
+Version Not OK/Send Start Control Connection
+Reply with Error
+  +--------+
+  |        |         Receive Control Connection Request Version OK
+  |        |         /Send Start Control Connection Reply
+  |        |   +----------------------------------------+
+  ^        V   ^                                        V
++-----------------+             Receive Start Ctl    +-----------------+
+|      Idle       |             Connection Request   |   Established   |
++-----------------+             /Send Stop Reply     +-----------------+
+        ^      ^                 Close TCP           V  V Local Terminate
+        |      +-------------------------------------+  | /Send Stop
+        |                                               |  Control Conn.
+        |                                               V  Request
+        |                                     +-----------------+
+        +-------------------------------------| Wait-Stop-Reply |
+                 Receive Stop Control         +-----------------+
+                 Connection Reply
+                 /Close TCP
+
+   idle
+      The control connection receiver waits for a TCP open attempt on
+      port 1723. When notified of an open TCP connection, it should
+      prepare to receive PPTP messages.  When a Start-Control-
+      Connection-Request is received its version field should be
+      examined. If the version is earlier than the receiver's version
+      and the earlier version can be supported by the receiver, the
+      receiver SHOULD send a Start-Control-Connection-Reply. If the
+      version is earlier than the receiver's version and the version
+      cannot be supported, the receiver SHOULD send a Start-Connection-
+      Reply message, close the TCP connection and remain in the idle
+      state.  If the receiver's version is the same as earlier than the
+      peer's, the receiver SHOULD send a Start-Control-Connection-Reply
+      with the receiver's version and enter the established state.
+
+   established
+      An established connection may be terminated by either a local
+      condition or the reception of a Stop-Control-Connection-Request.
+      In the event of a local termination, the originator MUST send a
+      Stop-Control-Connection-Request and enter the wait_stop_reply
+      state.
+
+
+
+
+
+
+
+Hamzeh, et al.               Informational                     [Page 39]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+      If the originator receives a Stop-Control-Connection-Request it
+      SHOULD send a Stop-Control-Connection-Reply and close the TCP
+      connection, making sure that the final TCP information has been
+      "pushed" properly.
+
+   wait_stop_reply
+      If a Stop-Control-Connection-Reply is received, the TCP connection
+      SHOULD be closed and the control connection becomes idle.
+
+3.1.3.  Start Control Connection Initiation Request Collision
+
+   A PAC and PNS must have only one control connection between them. It
+   is possible, however, for a PNS and a PAC to simultaneously attempt
+   to establish a control connection to each other. When a Start-
+   Control-Connection-Request is received on one TCP connection and
+   another Start-Control-Connection-Request has already been sent on
+   another TCP connection to the same peer, a collision has occurred.
+
+   The "winner" of the initiation race is the peer with the higher IP
+   address (compared as 32 bit unsigned values, network number more
+   significant). For example, if the peers 192.33.45.17 and 192.33.45.89
+   collide, the latter will be declared the winner.  The loser will
+   immediately close the TCP connection it initiated, without sending
+   any further PPTP control messages on it and will respond to the
+   winner's request with a Start-Control-Connection-Reply message. The
+   winner will wait for the Start-Control-Connection-Reply on the
+   connection it initiated and also wait for a TCP termination
+   indication on the connection the loser opened.  The winner MUST NOT
+   send any messages on the connection the loser initiated.
+
+3.1.4.  Keep Alives and Timers
+
+   A control connection SHOULD be closed by closing the underlying TCP
+   connection under the following circumstances:
+
+   1. If a control connection is not in the established state (i.e.,
+      Start-Control-Connection-Request and Start-Control-Connection-
+      Reply have not been exchanged), a control connection SHOULD be
+      closed after 60 seconds by a peer waiting for a Start-Control-
+      Connection-Request or Start-Control-Connection-Reply message.
+
+   2. If a peer's control connection is in the established state and has
+      not received a control message for 60 seconds, it SHOULD send a
+      Echo-Request message. If an Echo-Reply is not received 60 seconds
+      after the Echo-Request message transmission, the control
+      connection SHOULD be closed.
+
+
+
+
+
+Hamzeh, et al.               Informational                     [Page 40]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+3.2.  Call States
+
+3.2.1.  Timing considerations
+
+   Because of the real-time nature of telephone signaling, both the PNS
+   and PAC should be implemented with multi-threaded architectures such
+   that messages related to multiple calls are not serialized and
+   blocked. The transit delay between the PAC and PNS should not exceed
+   one second. The call and connection state figures do not specify
+   exceptions caused by timers. The implicit assumption is that since
+   the TCP-based control connection is being verified with keep-alives,
+   there is less need to maintain strict timers for call control
+   messages.
+
+   Establishing outbound international calls, including the modem
+   training and negotiation sequences, may take in excess of 1 minute so
+   the use of short timers is discouraged.
+
+   If a state transition does not occur within 1 minute (except for
+   connections in the idle or established states), the integrity of the
+   protocol processing between the peers is suspect and the ENTIRE
+   CONTROL CONNECTION should be closed and restarted. All Call IDs are
+   logically released whenever a control connection is started. This
+   presumably also helps in preventing toll calls from being "lost" and
+   never cleared.
+
+3.2.2.  Call ID Values
+
+   Each peer assigns a Call ID value to each user session it requests or
+   accepts. This Call ID value MUST be unique for the tunnel between the
+   PNS and PAC to which it belongs. Tunnels to other peers can use the
+   same Call ID number so the receiver of a packet on a tunnel needs to
+   associate a user session with a particular tunnel and Call ID.  It is
+   suggested that the number of potential Call ID values for each tunnel
+   be at least twice as large as the maximum number of calls expected on
+   a given tunnel.
+
+   A session is defined by the triple (PAC, PNS, Call ID).
+
+3.2.3.  Incoming Calls
+
+   An Incoming-Call-Request message is generated by the PAC when an
+   associated telephone line rings. The PAC selects a Call ID and serial
+   number and indicates the call bearer type.  Modems should always
+   indicate analog call type.  ISDN calls should indicate digital when
+   unrestricted digital service or rate adaption is used and analog if
+
+
+
+
+
+Hamzeh, et al.               Informational                     [Page 41]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+   digital modems are involved. Dialing number, dialed number, and
+   subaddress may be included in the message if they are available from
+   the telephone network.
+
+   Once the PAC sends the Incoming-Call-Request, it waits for a response
+   from the PNS but does not answer the call from the telephone network.
+   The PNS may choose not to accept the call if:
+
+      -  No resources are available to handle more sessions
+
+      -  The dialed, dialing, or subaddress fields are not indicative of
+         an authorized user
+
+      -  The bearer service is not authorized or supported
+
+   If the PNS chooses to accept the call, it responds with an Incoming-
+   Call-Reply which also indicates window sizes (see section 4.2). When
+   the PAC receives the Outgoing-Call-Reply, it attempts to connect the
+   call, assuming the calling party has not hung up. A final call
+   connected message from the PAC to the PNS indicates that the call
+   states for both the PAC and the PNS should enter the established
+   state.
+
+   When the dialed-in client hangs up, the call is cleared normally and
+   the PAC sends a Call-Disconnect-Notify message. If the PNS wishes to
+   clear a call, it sends a Call-Clear-Request message and then waits
+   for a Call-Disconnect-Notify.
+
+3.2.3.1.  PAC Incoming Call States
+
+    Ring/Send Incoming Call Request          +-----------------+
+  +----------------------------------------->|    wait_reply   |
+  |                                          +-----------------+
+  |           Receive Incoming Call Reply    V  V  V
+  |           Not Accepting                  |  |  |   Receive Incoming
+  |         +--------------------------------+  |  |   Call Reply Accept-
+  |         |    +------------------------------+  |   ing/Answer call;
+  |         |    |     Abort/Send Call             |   Send Call
+  ^         V    V     Disconnect Notify           V   Connected
++-----------------+                              +-----------------+
+|      idle       |<-----------------------------|   established   |
++-----------------+  Receive Clear Call Request  +-----------------+
+                     or telco call dropped
+                     or local disconnect
+                     /Send Call Disconnect Notify
+
+
+
+
+
+
+Hamzeh, et al.               Informational                     [Page 42]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
+
+
+The states associated with the PAC for incoming calls are:
+
+   idle
+      The PAC detects an incoming call on one of its telco interfaces.
+      Typically this means an analog line is ringing or an ISDN TE has
+      detected an incoming Q.931 SETUP message. The PAC sends an
+      Incoming-Call-Request message and moves to the wait_reply state.
+
+   wait_reply
+      The PAC receives an Incoming-Call-Reply message indicating non-
+      willingness to accept the call (general error or don't accept) and
+      moves back into the idle state. If the reply message indicates
+      that the call is accepted, the PAC sends an Incoming-Call-
+      Connected message and enters the established state.
+
+   established
+      Data is exchanged over the tunnel.  The call may be cleared
+      following:
+
+         An event on the telco connection. The PAC sends a
+         Call-Disconnect-Notify message
+
+         Receipt of a Call-Clear-Request.  The PAC sends a
+         Call-Disconnect-Notify message
+
+         A local reason. The PAC sends a Call-Disconnect-Notify message.
+
+3.2.3.2.  PNS Incoming Call States
+
+  Receive Incoming Call Request
+  /Send Incoming Call Reply                  +-----------------+
+   Not Accepting if Error                    |   Wait-Connect  |
+  +-----+                                    +-----------------+
+  |     |     Receive Incoming Call Req.     ^  V  V
+  |     |     /Send Incoming Call Reply OK   |  |  |   Receive Incoming
+  |     |   +--------------------------------+  |  |   Call Connect
+  ^     V   ^    V------------------------------+  V
++-----------------+  Receive Call Disconnect     +-----------------+
+|      Idle       |  Notify                   +- |   Established   |
++-----------------+                           |  +-----------------+
+        ^        ^                            |   V   Local Terminate
+        |        +----------------------------+   |   /Send Call Clear
+        |            Receive Call Disconnect      |    Request
+        |            Notify                       V
+        |                                      +-----------------+
+        +--------------------------------------| Wait-Disconnect |
+                     Receive Call Disconnect   +-----------------+
+                     Notify
+
+
+
+Hamzeh, et al.               Informational                     [Page 43]
+
+RFC 2637        Point-to-Point Tunneling Protocol (PPTP)       July 1999
